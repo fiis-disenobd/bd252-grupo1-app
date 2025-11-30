@@ -1,17 +1,17 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
-import Clientes from './pages/Clientes';
-import Productos from './pages/Productos';
-import Ventas from './pages/Ventas';
-import Reclamos from './pages/Reclamos';
-import Reportes from './pages/Reportes';
-import ReporteVentasDia from './pages/ReporteVentasDia';
-import ReporteStockOcupacion from './pages/ReporteStockOcupacion';
-import ReporteTrazabilidad from './pages/ReporteTrazabilidad';
-import ReporteTransporte from './pages/ReporteTransporte';
-import ReporteTopClientes from './pages/ReporteTopClientes';
-import ReporteProgramacion from './pages/ReporteProgramacion';
+import Clientes from './pages/gestion-cliente/Clientes';
+import Productos from './pages/gestion-producto/Productos';
+import Ventas from './pages/gestion-ventas/Ventas';
+import Reclamos from './pages/gestion-reclamo/Reclamos';
+import Reportes from './pages/gestion-reportes/Reportes';
+import ReporteVentasDia from './pages/gestion-reportes/ReporteVentasDia';
+import ReporteStockOcupacion from './pages/gestion-reportes/ReporteStockOcupacion';
+import ReporteTrazabilidad from './pages/gestion-reportes/ReporteTrazabilidad';
+import ReporteTransporte from './pages/gestion-reportes/ReporteTransporte';
+import ReporteTopClientes from './pages/gestion-reportes/ReporteTopClientes';
+import ReporteProgramacion from './pages/gestion-reportes/ReporteProgramacion';
 
 const App = () => {
   return (
