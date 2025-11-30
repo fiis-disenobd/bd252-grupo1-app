@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVentasDetalle, useVentasResumen } from '@/features/ventas/hooks';
+import { api } from '@/services/api';
 
 const iconBar = (
   <svg className="w-6 h-6 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -16,22 +17,77 @@ const ReporteVentasDia = () => {
   const [sede, setSede] = useState<string>('');
   const [especie, setEspecie] = useState<string>('');
   const [cliente, setCliente] = useState<string>('');
+  const [descargandoCsv, setDescargandoCsv] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [descargaError, setDescargaError] = useState<string | null>(null);
 
   const resumen = useVentasResumen();
 
   const [refreshFlag, setRefreshFlag] = useState(0);
 
-  const searchParams = useMemo(() => {
+  const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
     if (fecha) params.set('fecha', fecha);
     if (sede) params.set('sede', sede);
     if (especie) params.set('especie', especie);
     if (cliente) params.set('cliente', cliente);
+    return params;
+  }, [fecha, sede, especie, cliente]);
+
+  const searchParams = useMemo(() => {
+    const params = buildFilterParams();
     params.set('refresh', refreshFlag.toString());
     return params;
-  }, [fecha, sede, especie, cliente, refreshFlag]);
+  }, [buildFilterParams, refreshFlag]);
 
   const detalle = useVentasDetalle(searchParams);
+  const apiError = resumen.error || detalle.error;
+
+  const handleDescargarCsv = async () => {
+    try {
+      setDescargaError(null);
+      setDescargandoCsv(true);
+      const params = buildFilterParams();
+      const blob = await api.ventasDetalleCsv(params);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filenameDate = fecha || new Date().toISOString().slice(0, 10);
+      link.download = `reporte-ventas-dia-${filenameDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('No se pudo descargar el CSV', error);
+      setDescargaError('No se pudo descargar el CSV. Revisa que el backend esté disponible.');
+    } finally {
+      setDescargandoCsv(false);
+    }
+  };
+
+  const handleDescargarPdf = async () => {
+    try {
+      setDescargaError(null);
+      setDescargandoPdf(true);
+      const params = buildFilterParams();
+      const blob = await api.ventasDetallePdf(params);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filenameDate = fecha || new Date().toISOString().slice(0, 10);
+      link.download = `reporte-ventas-dia-${filenameDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('No se pudo descargar el PDF', error);
+      setDescargaError('No se pudo descargar el PDF. Revisa que el backend esté disponible.');
+    } finally {
+      setDescargandoPdf(false);
+    }
+  };
 
   return (
     <section className="space-y-8">
@@ -47,14 +103,38 @@ const ReporteVentasDia = () => {
           <h2 className="text-3xl font-semibold text-stone-900">Reporte de Ventas del Día</h2>
         </div>
         <div className="flex items-center gap-2">
-          <button className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold">
-            ↓ CSV
+          <button
+            onClick={handleDescargarCsv}
+            disabled={descargandoCsv}
+            className={`px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold ${
+              descargandoCsv ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
+          >
+            {descargandoCsv ? 'Descargando...' : 'CSV'}
           </button>
-          <button className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold">
-            ↓ PDF
+          <button
+            onClick={handleDescargarPdf}
+            disabled={descargandoPdf}
+            className={`px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold ${
+              descargandoPdf ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
+          >
+            {descargandoPdf ? 'Generando...' : 'PDF'}
           </button>
         </div>
       </div>
+
+      {descargaError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {descargaError}
+        </div>
+      )}
+
+      {apiError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          Error al consultar el reporte: {apiError}. Verifica que el backend esté corriendo en {import.meta.env.VITE_API_URL}.
+        </div>
+      )}
 
       <div className="bg-white border border-stone-200 rounded-2xl shadow-card p-6 space-y-6">
         <h3 className="text-lg font-semibold text-stone-900">Filtros de Búsqueda</h3>

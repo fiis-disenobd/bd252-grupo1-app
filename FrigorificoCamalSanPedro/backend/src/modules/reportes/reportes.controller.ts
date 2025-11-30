@@ -1,4 +1,5 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { ReportesService } from './reportes.service';
 import { VentasDiaQueryDto } from './dto/ventas-dia-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
@@ -21,6 +22,21 @@ export class ReportesController {
   @Get('ventas-dia/detalle')
   detalle(@Query() query: VentasDiaQueryDto) {
     return this.reportesService.detalleVentasDia(query);
+  }
+
+  @Get('ventas-dia/csv')
+  async detalleCsv(@Query() query: VentasDiaQueryDto, @Res({ passthrough: true }) res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-ventas-dia.csv"');
+    return this.reportesService.detalleVentasDiaCsv(query);
+  }
+
+  @Get('ventas-dia/pdf')
+  async detallePdf(@Query() query: VentasDiaQueryDto, @Res() res: Response) {
+    const buffer = await this.reportesService.detalleVentasDiaPdf(query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-ventas-dia.pdf"');
+    res.send(buffer);
   }
 
   @Get('stock-actual')

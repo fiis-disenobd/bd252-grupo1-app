@@ -9,12 +9,12 @@ type ReportCard = {
 const reportCards: ReportCard[] = [
   {
     title: 'Ventas del día',
-    description: 'Visualizar ventas diarias por especie/cliente/sede',
+    description: 'Visualizar ventas diarias',
     path: '/reportes/ventas-dia',
   },
   {
-    title: 'Stock, Ocupación e ingresos',
-    description: 'Monitoreo de stock, cámaras y recepción de ganado',
+    title: 'Stock',
+    description: 'Monitoreo de stock',
     path: '/reportes/stock-ocupacion',
   },
   {

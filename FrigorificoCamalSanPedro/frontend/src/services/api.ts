@@ -1,5 +1,10 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
+const withQuery = (path: string, params?: URLSearchParams) => {
+  const query = params?.toString();
+  return query ? `${path}?${query}` : path;
+};
+
 async function request<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`);
 
@@ -8,6 +13,16 @@ async function request<T>(path: string): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+
+  if (!response.ok) {
+    throw new Error(`Solicitud fallida (${response.status})`);
+  }
+
+  return response.blob();
 }
 
 export type HealthResponse = {
@@ -39,7 +54,9 @@ export const api = {
         descuentoPorcentaje: number;
         total: number;
       }>
-    >(`/reportes/ventas-dia/detalle?${params.toString()}`),
+    >(withQuery('/reportes/ventas-dia/detalle', params)),
+  ventasDetalleCsv: (params: URLSearchParams) => requestBlob(withQuery('/reportes/ventas-dia/csv', params)),
+  ventasDetallePdf: (params: URLSearchParams) => requestBlob(withQuery('/reportes/ventas-dia/pdf', params)),
   stockActual: (params: URLSearchParams) =>
     request<
       Array<{
@@ -49,7 +66,7 @@ export const api = {
         kilogramos: number;
         estado: string;
       }>
-    >(`/reportes/stock-actual?${params.toString()}`),
+    >(withQuery('/reportes/stock-actual', params)),
   trazabilidadPieza: (pedidoIdOrCodigo: string) =>
     request<{
       codigo: string;

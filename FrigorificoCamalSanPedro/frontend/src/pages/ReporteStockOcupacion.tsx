@@ -2,11 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStockActual } from '@/features/stock/hooks';
 
-const tabs = ['Stock Actual', 'Ocupación de Cámaras', 'Ingresos (Recepción)'];
-
 const ReporteStockOcupacion = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(tabs[0]);
   const [camara, setCamara] = useState('');
   const [especie, setEspecie] = useState('');
 
@@ -24,25 +21,11 @@ const ReporteStockOcupacion = () => {
             <span className="text-lg">←</span>
             <span className="text-sm font-semibold">Atrás</span>
           </button>
-          <h2 className="text-3xl font-semibold text-stone-900">Stock, Ocupación e Ingresos</h2>
+          <h2 className="text-3xl font-semibold text-stone-900">Stock</h2>
         </div>
         <button className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold">
           ↓ Exportar
         </button>
-      </div>
-
-      <div className="bg-stone-100 rounded-full p-1 flex text-sm font-semibold text-stone-600">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 px-4 py-2 rounded-full transition-colors ${
-              activeTab === tab ? 'bg-white text-primary shadow-sm' : 'hover:text-primary'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
       </div>
 
       <div className="bg-white border border-stone-200 rounded-2xl shadow-card p-6 space-y-4">
@@ -89,10 +72,7 @@ const ReporteStockOcupacion = () => {
             </select>
           </label>
         </div>
-        <button
-          onClick={() => setActiveTab(activeTab)} // fuerza re-render, filtros en tiempo real
-          className="inline-flex items-center justify-center px-5 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-[#5a2b0d]"
-        >
+        <button className="inline-flex items-center justify-center px-5 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-[#5a2b0d]">
           Aplicar Filtros
         </button>
       </div>

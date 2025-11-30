@@ -3,6 +3,18 @@ import { DataSource } from 'typeorm';
 import { VentasDiaQueryDto } from './dto/ventas-dia-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
 import { TrazabilidadQueryDto } from './dto/trazabilidad-query.dto';
+import PDFDocument = require('pdfkit');
+
+type PdfDoc = PDFKit.PDFDocument;
+
+type VentaDetalleRow = {
+  cliente: string;
+  especie: string;
+  kilogramos: number;
+  precioKg: number;
+  descuentoPorcentaje: number;
+  total: number;
+};
 
 @Injectable()
 export class ReportesService {
@@ -35,7 +47,7 @@ export class ReportesService {
     };
   }
 
-  async detalleVentasDia(filters: VentasDiaQueryDto) {
+  async detalleVentasDia(filters: VentasDiaQueryDto): Promise<VentaDetalleRow[]> {
     const { fecha, sede, especie, cliente } = filters;
 
     const rows = await this.dataSource.query(
@@ -69,6 +81,147 @@ export class ReportesService {
       descuentoPorcentaje: Number(row.descuento_porcentaje ?? 0),
       total: Number(row.total ?? 0)
     }));
+  }
+
+  private escapeCsvValue(value: string | number) {
+    const text = `${value ?? ''}`;
+    if (/[",\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  }
+
+  private buildVentasDiaCsv(rows: VentaDetalleRow[]) {
+    const header = ['Cliente', 'Especie', 'Kilogramos', 'Precio/kg', 'Descuento (%)', 'Total'];
+    const lines = rows.map((row) =>
+      [
+        this.escapeCsvValue(row.cliente),
+        this.escapeCsvValue(row.especie),
+        this.escapeCsvValue(row.kilogramos),
+        this.escapeCsvValue(row.precioKg.toFixed(2)),
+        this.escapeCsvValue(row.descuentoPorcentaje),
+        this.escapeCsvValue(row.total.toFixed(2))
+      ].join(',')
+    );
+
+    return [header.join(','), ...lines].join('\n');
+  }
+
+  async detalleVentasDiaCsv(filters: VentasDiaQueryDto) {
+    const rows = await this.detalleVentasDia(filters);
+    return this.buildVentasDiaCsv(rows);
+  }
+
+  private async createPdfBuffer(build: (doc: PdfDoc) => void): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 40 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk) => chunks.push(chunk as Buffer));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', (err) => reject(err));
+
+      build(doc);
+      doc.end();
+    });
+  }
+
+  private buildVentasDiaPdfContent(doc: PdfDoc, rows: VentaDetalleRow[]) {
+    const cols = {
+      cliente: { x: 40, width: 170, align: 'left' as const },
+      especie: { x: 210, width: 90, align: 'left' as const },
+      kilos: { x: 300, width: 60, align: 'right' as const },
+      precio: { x: 370, width: 90, align: 'right' as const },
+      descuento: { x: 470, width: 60, align: 'right' as const },
+      total: { x: 540, width: 60, align: 'right' as const }
+    };
+
+    doc.fontSize(18).text('Reporte de Ventas del Día', { align: 'center' });
+    doc.moveDown();
+
+    doc.fontSize(12).text('Detalle de ventas:', { underline: true });
+    doc.moveDown(0.5);
+
+    const drawRow = (
+      values: { text: string | number; col: keyof typeof cols; font?: 'normal' | 'bold' }[],
+      bold = false
+    ) => {
+      const startY = doc.y;
+      values.forEach(({ text, col }) => {
+        const { x, width, align } = cols[col];
+        doc
+          .font(bold ? 'Helvetica-Bold' : 'Helvetica')
+          .text(String(text), x, startY, { width, align, lineBreak: false });
+      });
+      doc.y = startY + doc.currentLineHeight();
+    };
+
+    drawRow(
+      [
+        { text: 'Cliente', col: 'cliente' },
+        { text: 'Especie', col: 'especie' },
+        { text: 'Kg', col: 'kilos' },
+        { text: 'Precio/kg', col: 'precio' },
+        { text: 'Desc. (%)', col: 'descuento' },
+        { text: 'Total', col: 'total' }
+      ],
+      true
+    );
+    doc.moveTo(cols.cliente.x, doc.y + 2).lineTo(600, doc.y + 2).stroke();
+    doc.moveDown(0.5);
+
+    if (!rows.length) {
+      doc.font('Helvetica').text('Sin resultados para los filtros aplicados.');
+      return;
+    }
+
+    rows.forEach((row) => {
+      drawRow([
+        { text: row.cliente, col: 'cliente' },
+        { text: row.especie, col: 'especie' },
+        { text: row.kilogramos, col: 'kilos' },
+        { text: `S/ ${row.precioKg.toFixed(2)}`, col: 'precio' },
+        { text: `${row.descuentoPorcentaje}%`, col: 'descuento' },
+        { text: `S/ ${row.total.toFixed(2)}`, col: 'total' }
+      ]);
+    });
+
+    const totalVentas = rows.reduce((acc, r) => acc + r.total, 0);
+    const totalKg = rows.reduce((acc, r) => acc + r.kilogramos, 0);
+    doc.moveDown();
+
+    const summaryX = cols.precio.x;
+    const summaryWidth = 180;
+    const labelWidth = summaryWidth * 0.5;
+    const valueWidth = summaryWidth * 0.5;
+    doc
+      .font('Helvetica-Bold')
+      .text('Totales', summaryX, doc.y, { width: summaryWidth, align: 'left' })
+      .moveDown(0.3);
+    doc
+      .font('Helvetica')
+      .text('Kilogramos:', summaryX, doc.y, { width: labelWidth, align: 'left' });
+    doc
+      .font('Helvetica-Bold')
+      .text(`${totalKg} kg`, summaryX + labelWidth, doc.y - doc.currentLineHeight(), {
+        width: valueWidth,
+        align: 'right'
+      })
+      .moveDown(0.2);
+    doc
+      .font('Helvetica')
+      .text('Ventas:', summaryX, doc.y, { width: labelWidth, align: 'left' });
+    doc
+      .font('Helvetica-Bold')
+      .text(`S/ ${totalVentas.toFixed(2)}`, summaryX + labelWidth, doc.y - doc.currentLineHeight(), {
+        width: valueWidth,
+        align: 'right'
+      });
+  }
+
+  async detalleVentasDiaPdf(filters: VentasDiaQueryDto) {
+    const rows = await this.detalleVentasDia(filters);
+    return this.createPdfBuffer((doc) => this.buildVentasDiaPdfContent(doc, rows));
   }
 
   async stockActual(filters: StockQueryDto) {
