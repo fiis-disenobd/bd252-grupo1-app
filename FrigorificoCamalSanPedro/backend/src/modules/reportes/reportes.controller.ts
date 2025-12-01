@@ -38,6 +38,14 @@ export class ReportesController {
     return this.reportesService.detalleTransporte(query);
   }
 
+  @Get('transporte/detalle/csv')
+  async detalleTransporteCsv(@Query() query: TransporteQueryDto, @Res({ passthrough: true }) res: Response) {
+    const csv = await this.reportesService.detalleTransporteCsv(query);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-transporte.csv"');
+    return csv;
+  }
+
   @Get('top-clientes/resumen')
   resumenTopClientes(@Query() query: TopClientesQueryDto) {
     return this.reportesService.resumenTopClientes(query);
@@ -111,5 +119,15 @@ export class ReportesController {
   @Get('trazabilidad/reclamos')
   trazabilidadReclamos(@Query() query: TrazabilidadQueryDto) {
     return this.reportesService.trazabilidadReclamos(query);
+  }
+
+  @Get('trazabilidad/piezas')
+  trazabilidadPiezas() {
+    return this.reportesService.todasTrazabilidadesPieza();
+  }
+
+  @Get('trazabilidad/reclamos/todos')
+  trazabilidadReclamosTodos() {
+    return this.reportesService.todasTrazabilidadesReclamos();
   }
 }

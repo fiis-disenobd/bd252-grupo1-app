@@ -86,11 +86,6 @@ export class ReportesService {
       clauses.push(`p.fecha_pedido <= $${params.length}::date`);
     }
 
-    if (filters.distrito) {
-      params.push(filters.distrito);
-      clauses.push(`c.cod_distrito = $${params.length}`);
-    }
-
     if (`${filters.soloPagados}` === 'true') {
       clauses.push('EXISTS (SELECT 1 FROM ventas.venta v WHERE v.id_pedido = p.id_pedido)');
     }
@@ -138,7 +133,6 @@ export class ReportesService {
           e.fecha_entrega,
           e.hora_entrega,
           c.nombre       AS cliente,
-          c.cod_distrito AS distrito,
           p.peso_kg,
           e.estado_entrega,
           EXTRACT(
@@ -191,7 +185,6 @@ export class ReportesService {
           e.fecha_entrega,
           e.hora_entrega,
           c.nombre        AS cliente,
-          c.cod_distrito  AS distrito,
           p.peso_kg,
           e.estado_entrega,
           (e.fecha_entrega + e.hora_entrega) -
@@ -213,7 +206,6 @@ export class ReportesService {
         fecha_pedido                         AS fecha,
         id_pedido,
         cliente,
-        distrito,
         peso_kg,
         TO_CHAR(hora_pedido,   'HH24:MI')    AS salida,
         TO_CHAR(hora_entrega,  'HH24:MI')    AS llegada,
@@ -236,7 +228,6 @@ export class ReportesService {
       fecha: row.fecha,
       idPedido: Number(row.id_pedido ?? row.idpedido ?? 0),
       cliente: row.cliente,
-      distrito: row.distrito,
       pesoKg: Number(row.peso_kg ?? 0),
       salida: row.salida,
       llegada: row.llegada,
@@ -245,6 +236,66 @@ export class ReportesService {
       estadoEntrega: row.estado_entrega,
       retrasoMinutos: Number(row.retraso_minutos ?? 0)
     }));
+  }
+
+  async detalleTransporteCsv(filters: TransporteQueryDto) {
+    const rows = await this.detalleTransporte(filters);
+    const header = ['Fecha', 'Id Pedido', 'Cliente', 'Peso (kg)', 'Salida', 'Llegada', 'Tiempo (min)', 'Estado', 'Retraso (min)'];
+    const lines = rows.map((r) =>
+      [
+        this.escapeCsvValue(r.fecha),
+        this.escapeCsvValue(r.idPedido),
+        this.escapeCsvValue(r.cliente),
+        this.escapeCsvValue(r.pesoKg),
+        this.escapeCsvValue(r.salida ?? '-'),
+        this.escapeCsvValue(r.llegada ?? '-'),
+        this.escapeCsvValue(r.minutos ?? r.duracion ?? ''),
+        this.escapeCsvValue(r.estadoEntrega ?? ''),
+        this.escapeCsvValue(r.retrasoMinutos)
+      ].join(',')
+    );
+    return [header.join(','), ...lines].join('\n');
+  }
+
+  async detalleTransportePdf(filters: TransporteQueryDto) {
+    const rows = await this.detalleTransporte(filters);
+    return this.createPdfBuffer((doc) => {
+      doc.fontSize(16).text('Detalle de Transporte Lurín → Ate', { align: 'center' });
+      doc.moveDown();
+
+      const cols = [
+        { key: 'fecha', label: 'Fecha', width: 80 },
+        { key: 'idPedido', label: 'Pedido', width: 60 },
+        { key: 'cliente', label: 'Cliente', width: 110 },
+        { key: 'pesoKg', label: 'Kg', width: 50, align: 'right' as const },
+        { key: 'salida', label: 'Salida', width: 55, align: 'center' as const },
+        { key: 'llegada', label: 'Llegada', width: 55, align: 'center' as const },
+        { key: 'duracion', label: 'Duración', width: 65, align: 'center' as const },
+        { key: 'estadoEntrega', label: 'Estado', width: 70, align: 'center' as const },
+        { key: 'retrasoMinutos', label: 'Retraso', width: 60, align: 'right' as const }
+      ];
+
+      const headerY = doc.y;
+      cols.reduce((x, col) => {
+        doc.font('Helvetica-Bold').fontSize(10).text(col.label, x, headerY, { width: col.width, align: col.align ?? 'left' });
+        return x + col.width;
+      }, 40);
+      doc.moveDown(0.5);
+      doc.moveTo(40, doc.y).lineTo(550, doc.y).stroke();
+
+      const retrasoLabel = (m: number) => (m > 0 ? `+${m}m` : 'A tiempo');
+
+      rows.forEach((r) => {
+        const startY = doc.y + 4;
+        let x = 40;
+        cols.forEach((col) => {
+          const val = col.key === 'retrasoMinutos' ? retrasoLabel(r.retrasoMinutos) : (r as any)[col.key];
+          doc.font('Helvetica').fontSize(10).text(`${val ?? '-'}`, x, startY, { width: col.width, align: col.align ?? 'left' });
+          x += col.width;
+        });
+        doc.moveDown(1);
+      });
+    });
   }
 
   async resumenProgramacion(filters: ProgramacionQueryDto) {
@@ -1047,6 +1098,76 @@ export class ReportesService {
     );
 
     return rows.map((r: any) => ({
+      tipoReclamo: r.tipo_reclamo,
+      urgencia: r.urgencia,
+      estado: r.estado,
+      descripcion: r.descripcion
+    }));
+  }
+
+  async todasTrazabilidadesPieza() {
+    const rows = await this.dataSource.query(
+      `
+      SELECT
+          'PZ-2025-' || TO_CHAR(p.id_pedido, 'FM000000') AS codigo_pieza,
+          p.tipo_carne              AS especie,
+          p.peso_kg                 AS peso_final_kg,
+          v.fecha                   AS fecha_beneficio,
+          v.hora                    AS hora_beneficio,
+          'Cámara ' || cam.id_camara AS camara,
+          cm.nombre                 AS comisionado,
+          c.nombre                  AS cliente,
+          COALESCE(
+              (
+                  SELECT r.estado_reclamo
+                  FROM reclamos.reclamo r
+                  WHERE r.id_pedido = p.id_pedido
+                  ORDER BY r.id_reclamo DESC
+                  LIMIT 1
+              ),
+              'SIN_RECLAMOS'
+          ) AS estado_reclamo
+      FROM ventas.pedido p
+      JOIN ventas.venta    v  ON v.id_pedido  = p.id_pedido
+      JOIN ventas.cliente  c  ON c.id_cliente = p.id_cliente
+      JOIN producto.servicio s ON s.id_ganado = CAST(SUBSTRING(p.id_ganado FROM 2) AS INTEGER)
+      JOIN producto.camara cam ON cam.id_camara = s.id_camara
+      JOIN producto.comisionado cm ON cm.id_comisionado = s.id_comisionado
+      ORDER BY p.id_pedido DESC
+      LIMIT 100;
+      `
+    );
+
+    return rows.map((row: any) => ({
+      codigo: row.codigo_pieza,
+      especie: row.especie,
+      pesoFinalKg: Number(row.peso_final_kg ?? 0),
+      fechaBeneficio: row.fecha_beneficio,
+      horaBeneficio: row.hora_beneficio,
+      camara: row.camara,
+      comisionado: row.comisionado,
+      cliente: row.cliente,
+      estadoReclamo: row.estado_reclamo
+    }));
+  }
+
+  async todasTrazabilidadesReclamos() {
+    const rows = await this.dataSource.query(
+      `
+      SELECT
+          r.id_pedido,
+          r.tipo_reclamo   AS tipo_reclamo,
+          r.urgencia       AS urgencia,
+          r.estado_reclamo AS estado,
+          r.descripcion    AS descripcion
+      FROM reclamos.reclamo r
+      ORDER BY r.id_pedido DESC, r.id_reclamo DESC
+      LIMIT 200;
+      `
+    );
+
+    return rows.map((r: any) => ({
+      pedidoId: r.id_pedido,
       tipoReclamo: r.tipo_reclamo,
       urgencia: r.urgencia,
       estado: r.estado,

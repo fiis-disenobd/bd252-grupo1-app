@@ -6,10 +6,10 @@ const ReporteTrazabilidad = () => {
   const navigate = useNavigate();
   const [codigo, setCodigo] = useState('PZ-2025-000001');
   const [buscarCodigo, setBuscarCodigo] = useState('PZ-2025-000001');
-  const { detalle, reclamos, loading, error } = useTrazabilidad(buscarCodigo);
+  const { detalle, detalleLista, reclamos, loading, error } = useTrazabilidad(buscarCodigo);
 
   const handleBuscar = () => {
-    if (codigo.trim()) setBuscarCodigo(codigo.trim());
+    setBuscarCodigo(codigo.trim());
   };
 
   return (
@@ -65,11 +65,7 @@ const ReporteTrazabilidad = () => {
             Consultando trazabilidad...
           </div>
         )}
-        {!loading && detalle && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Se encontró la trazabilidad completa de la pieza {detalle.codigo}.
-          </div>
-        )}
+        {/* Mensaje de éxito removido a solicitud */}
         {!loading && !detalle && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
             No se encontró trazabilidad para el código ingresado.
@@ -131,6 +127,41 @@ const ReporteTrazabilidad = () => {
                 </span>
               </div>
             </div>
+          </div>
+        ) : detalleLista.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm text-stone-700">
+              <thead className="bg-stone-50 text-left text-xs uppercase tracking-widest text-stone-500">
+                <tr>
+                  <th className="px-4 py-3">Código</th>
+                  <th className="px-4 py-3">Especie</th>
+                  <th className="px-4 py-3">Peso (kg)</th>
+                  <th className="px-4 py-3">Beneficio</th>
+                  <th className="px-4 py-3">Cámara</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Estado Reclamo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {detalleLista.map((p) => (
+                  <tr key={p.codigo} className="hover:bg-stone-50">
+                    <td className="px-4 py-3 font-semibold text-stone-900">{p.codigo}</td>
+                    <td className="px-4 py-3">{p.especie}</td>
+                    <td className="px-4 py-3">{p.pesoFinalKg}</td>
+                    <td className="px-4 py-3">
+                      {p.fechaBeneficio} {p.horaBeneficio}
+                    </td>
+                    <td className="px-4 py-3">{p.camara}</td>
+                    <td className="px-4 py-3">{p.cliente}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200">
+                        {p.estadoReclamo}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
           <p className="text-sm text-stone-500">Sin datos de pieza. Intenta otra búsqueda.</p>

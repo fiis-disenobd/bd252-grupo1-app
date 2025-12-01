@@ -172,7 +172,6 @@ export type TransporteDetalle = {
   fecha: string;
   idPedido: number;
   cliente: string;
-  distrito: string;
   pesoKg: number;
   salida: string | null;
   llegada: string | null;
@@ -233,6 +232,30 @@ export const api = {
         descripcion: string;
       }>
     >(`/reportes/trazabilidad/reclamos?codigo=${encodeURIComponent(pedidoIdOrCodigo)}`),
+  trazabilidadPiezas: () =>
+    request<
+      Array<{
+        codigo: string;
+        especie: string;
+        pesoFinalKg: number;
+        fechaBeneficio: string;
+        horaBeneficio: string;
+        camara: string;
+        comisionado: string;
+        cliente: string;
+        estadoReclamo: string;
+      }>
+    >('/reportes/trazabilidad/piezas'),
+  trazabilidadReclamosTodos: () =>
+    request<
+      Array<{
+        pedidoId: number;
+        tipoReclamo: string;
+        urgencia: string;
+        estado: string;
+        descripcion: string;
+      }>
+    >('/reportes/trazabilidad/reclamos/todos'),
   programacionResumen: (params: URLSearchParams) =>
     request<ProgramacionResumen>(withQuery('/reportes/programacion/resumen', params)),
   programaciones: (params: URLSearchParams) =>
@@ -257,4 +280,5 @@ export const api = {
     request<TransporteResumen>(withQuery('/reportes/transporte/resumen', params)),
   transporteDetalle: (params: URLSearchParams) =>
     request<TransporteDetalle[]>(withQuery('/reportes/transporte/detalle', params)),
+  transporteDetalleCsv: (params: URLSearchParams) => requestBlob(withQuery('/reportes/transporte/detalle/csv', params)),
 };
