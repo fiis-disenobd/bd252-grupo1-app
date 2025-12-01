@@ -10,6 +10,29 @@ const ReporteStockOcupacion = () => {
   const filters = useMemo(() => ({ camara, especie }), [camara, especie]);
   const { rows, loading } = useStockActual(filters);
 
+  const handleExport = () => {
+    const header = ['Camara', 'Especie', 'Piezas', 'Kilogramos', 'Estado'];
+    const lines = rows.map((r) =>
+      [
+        r.camara,
+        r.especie,
+        r.piezas,
+        r.kilogramos.toString(),
+        r.estado
+      ]
+        .map((v) => `"${(`${v ?? ''}`).replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    const csv = [header.join(','), ...lines].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'stock-actual.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <section className="space-y-8">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -23,7 +46,10 @@ const ReporteStockOcupacion = () => {
           </button>
           <h2 className="text-3xl font-semibold text-stone-900">Stock</h2>
         </div>
-        <button className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold">
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold"
+        >
           ↓ Exportar
         </button>
       </div>
@@ -36,15 +62,7 @@ const ReporteStockOcupacion = () => {
           </svg>
           <span>Filtros de Stock</span>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <label className="flex flex-col gap-2 text-sm text-stone-700">
-            <span className="font-semibold">Sede</span>
-            <select className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-primary/40">
-              <option>Seleccionar sede</option>
-              <option>Lurín</option>
-              <option>Ate</option>
-            </select>
-          </label>
+        <div className="grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-stone-700">
             <span className="font-semibold">Cámara</span>
             <select

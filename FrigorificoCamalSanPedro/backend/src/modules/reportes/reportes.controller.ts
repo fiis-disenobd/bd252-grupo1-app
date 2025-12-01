@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { ReportesService } from './reportes.service';
 import { VentasDiaQueryDto } from './dto/ventas-dia-query.dto';
@@ -18,6 +18,11 @@ export class ReportesController {
     return this.reportesService.getResumenMock();
   }
 
+  @Get('catalogo')
+  catalogoReportes() {
+    return this.reportesService.catalogoReportes();
+  }
+
   @Get('ventas-dia/resumen')
   resumen() {
     return this.reportesService.resumenVentasDia();
@@ -31,6 +36,14 @@ export class ReportesController {
   @Get('transporte/detalle')
   detalleTransporte(@Query() query: TransporteQueryDto) {
     return this.reportesService.detalleTransporte(query);
+  }
+
+  @Get('transporte/detalle/csv')
+  async detalleTransporteCsv(@Query() query: TransporteQueryDto, @Res({ passthrough: true }) res: Response) {
+    const csv = await this.reportesService.detalleTransporteCsv(query);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="reporte-transporte.csv"');
+    return csv;
   }
 
   @Get('top-clientes/resumen')
@@ -56,6 +69,16 @@ export class ReportesController {
   @Get('programacion/ejecuciones')
   ejecucionesProgramacion(@Query() query: ProgramacionQueryDto) {
     return this.reportesService.ejecucionesRecientes(query);
+  }
+
+  @Patch('programacion/:id/estado')
+  actualizarEstadoProgramacion(@Param('id') id: string, @Body() body: { activo: boolean }) {
+    return this.reportesService.actualizarEstadoProgramacion(id, body?.activo);
+  }
+
+  @Delete('programacion/:id')
+  eliminarProgramacion(@Param('id') id: string) {
+    return this.reportesService.eliminarProgramacion(id);
   }
 
   @Post('programacion')
@@ -96,5 +119,15 @@ export class ReportesController {
   @Get('trazabilidad/reclamos')
   trazabilidadReclamos(@Query() query: TrazabilidadQueryDto) {
     return this.reportesService.trazabilidadReclamos(query);
+  }
+
+  @Get('trazabilidad/piezas')
+  trazabilidadPiezas() {
+    return this.reportesService.todasTrazabilidadesPieza();
+  }
+
+  @Get('trazabilidad/reclamos/todos')
+  trazabilidadReclamosTodos() {
+    return this.reportesService.todasTrazabilidadesReclamos();
   }
 }

@@ -14,6 +14,7 @@ export type TrazabilidadDetalle = {
 };
 
 export type ReclamoItem = {
+  pedidoId?: number;
   tipoReclamo: string;
   urgencia: string;
   estado: string;
@@ -22,29 +23,48 @@ export type ReclamoItem = {
 
 export const useTrazabilidad = (codigo: string) => {
   const [detalle, setDetalle] = useState<TrazabilidadDetalle | null>(null);
+  const [detalleLista, setDetalleLista] = useState<TrazabilidadDetalle[]>([]);
   const [reclamos, setReclamos] = useState<ReclamoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!codigo) return;
     let mounted = true;
     (async () => {
       setLoading(true);
       setError(null);
+      // limpiar para evitar que quede el último detalle mostrado
+      setDetalle(null);
+      if (!codigo) {
+        setReclamos([]);
+      }
       try {
-        const [pieza, reclamosResp] = await Promise.all([
-          api.trazabilidadPieza(codigo),
-          api.trazabilidadReclamos(codigo)
-        ]);
-        if (mounted) {
-          setDetalle(pieza);
-          setReclamos(reclamosResp);
+        if (codigo) {
+          const [pieza, reclamosResp] = await Promise.all([
+            api.trazabilidadPieza(codigo),
+            api.trazabilidadReclamos(codigo)
+          ]);
+          if (mounted) {
+            setDetalle(pieza);
+            setDetalleLista(pieza ? [pieza] : []);
+            setReclamos(reclamosResp);
+          }
+        } else {
+          const [piezas, reclamosResp] = await Promise.all([
+            api.trazabilidadPiezas(),
+            api.trazabilidadReclamosTodos()
+          ]);
+          if (mounted) {
+            setDetalle(null);
+            setDetalleLista(piezas);
+            setReclamos(reclamosResp);
+          }
         }
       } catch (err) {
         if (mounted) {
           setError((err as Error).message);
           setDetalle(null);
+          setDetalleLista([]);
           setReclamos([]);
         }
       } finally {
@@ -56,5 +76,5 @@ export const useTrazabilidad = (codigo: string) => {
     };
   }, [codigo]);
 
-  return { detalle, reclamos, loading, error };
+  return { detalle, detalleLista, reclamos, loading, error };
 };

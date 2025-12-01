@@ -8,20 +8,16 @@ const formatNumber = (value: number, opts?: Intl.NumberFormatOptions) =>
 const ReporteTopClientes = () => {
   const navigate = useNavigate();
 
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
   const [cliente, setCliente] = useState('');
-  const [antiguedadMin, setAntiguedadMin] = useState('10');
+  const [antiguedadMin, setAntiguedadMin] = useState('');
   const [refreshFlag, setRefreshFlag] = useState(0);
 
   const buildParams = useCallback(() => {
     const params = new URLSearchParams();
-    if (fechaInicio) params.set('fechaInicio', fechaInicio);
-    if (fechaFin) params.set('fechaFin', fechaFin);
     if (cliente) params.set('cliente', cliente);
     if (antiguedadMin) params.set('antiguedadMin', antiguedadMin);
     return params;
-  }, [fechaInicio, fechaFin, cliente, antiguedadMin]);
+  }, [cliente, antiguedadMin]);
 
   const searchParams = useMemo(() => {
     const params = buildParams();
@@ -74,25 +70,7 @@ const ReporteTopClientes = () => {
 
       <div className="bg-white border border-stone-200 rounded-2xl shadow-card p-6 space-y-6">
         <h3 className="text-lg font-semibold text-stone-900">Filtros de Análisis</h3>
-        <div className="grid gap-4 md:grid-cols-3">
-          <label className="flex flex-col gap-2 text-sm text-stone-700">
-            <span className="font-semibold">Fecha Inicio</span>
-            <input
-              type="date"
-              value={fechaInicio}
-              onChange={(e) => setFechaInicio(e.target.value)}
-              className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm text-stone-700">
-            <span className="font-semibold">Fecha Fin</span>
-            <input
-              type="date"
-              value={fechaFin}
-              onChange={(e) => setFechaFin(e.target.value)}
-              className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </label>
+        <div className="grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-stone-700">
             <span className="font-semibold">Cliente</span>
             <input

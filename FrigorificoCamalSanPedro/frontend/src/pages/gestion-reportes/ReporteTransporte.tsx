@@ -27,7 +27,6 @@ const ReporteTransporte = () => {
 
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  const [distrito, setDistrito] = useState('');
   const [soloPagados, setSoloPagados] = useState(false);
   const [refreshFlag, setRefreshFlag] = useState(0);
 
@@ -35,10 +34,9 @@ const ReporteTransporte = () => {
     const params = new URLSearchParams();
     if (fechaInicio) params.set('fechaInicio', fechaInicio);
     if (fechaFin) params.set('fechaFin', fechaFin);
-    if (distrito) params.set('distrito', distrito);
     if (soloPagados) params.set('soloPagados', 'true');
     return params;
-  }, [fechaInicio, fechaFin, distrito, soloPagados]);
+  }, [fechaInicio, fechaFin, soloPagados]);
 
   const searchParams = useMemo(() => {
     const params = buildParams();
@@ -78,7 +76,23 @@ const ReporteTransporte = () => {
           </button>
           <h2 className="text-3xl font-semibold text-stone-900">Transporte Lurín → Ate</h2>
         </div>
-        <button className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold">
+        <button
+          onClick={async () => {
+            try {
+              const blob = await api.transporteDetalleCsv(searchParams);
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'reporte-transporte.csv';
+              link.click();
+              URL.revokeObjectURL(url);
+            } catch (err) {
+              console.error(err);
+              alert('No se pudo exportar el reporte.');
+            }
+          }}
+          className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold"
+        >
           ⬇ Exportar Reporte
         </button>
       </div>
@@ -110,18 +124,7 @@ const ReporteTransporte = () => {
               className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
           </label>
-          <label className="flex flex-col gap-2 text-sm text-stone-700">
-            <span className="font-semibold">Sede Destino</span>
-            <select
-              value={distrito}
-              onChange={(e) => setDistrito(e.target.value)}
-              className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
-            >
-              <option value="">Todos los distritos</option>
-              <option value="ATE">Ate</option>
-              <option value="LURIN">Lurín</option>
-            </select>
-          </label>
+          {/* Filtro de sede destino removido */}
         </div>
         <div className="flex items-center justify-between gap-4 text-sm text-stone-700 flex-wrap">
           <div className="flex items-center gap-2 text-amber-700">
@@ -177,7 +180,6 @@ const ReporteTransporte = () => {
                 <th className="px-6 py-3">Fecha</th>
                 <th className="px-6 py-3">Id Pedido</th>
                 <th className="px-6 py-3">Cliente</th>
-                <th className="px-6 py-3">Distrito</th>
                 <th className="px-6 py-3">Peso (kg)</th>
                 <th className="px-6 py-3">Salida</th>
                 <th className="px-6 py-3">Llegada</th>
@@ -189,7 +191,7 @@ const ReporteTransporte = () => {
             <tbody className="divide-y divide-stone-100">
               {detalle.loading && (
                 <tr>
-                  <td colSpan={10} className="px-6 py-4 text-center text-stone-500">
+                  <td colSpan={9} className="px-6 py-4 text-center text-stone-500">
                     Consultando viajes...
                   </td>
                 </tr>
@@ -202,14 +204,9 @@ const ReporteTransporte = () => {
                   return (
                     <tr key={`${viaje.fecha}-${viaje.idPedido}`} className="hover:bg-stone-50">
                       <td className="px-6 py-4 font-semibold text-stone-900">{viaje.fecha}</td>
-                      <td className="px-6 py-4">#{viaje.idPedido}</td>
-                      <td className="px-6 py-4">{viaje.cliente}</td>
-                      <td className="px-6 py-4">
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200">
-                          {viaje.distrito || '—'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">{viaje.pesoKg}</td>
+                  <td className="px-6 py-4">#{viaje.idPedido}</td>
+                  <td className="px-6 py-4">{viaje.cliente}</td>
+                  <td className="px-6 py-4">{viaje.pesoKg}</td>
                       <td className="px-6 py-4">{viaje.salida ?? '-'}</td>
                       <td className="px-6 py-4">{viaje.llegada ?? '-'}</td>
                       <td className="px-6 py-4">{duracionLabel}</td>
@@ -240,7 +237,7 @@ const ReporteTransporte = () => {
                 })}
               {!detalle.loading && !detalle.rows.length && (
                 <tr>
-                  <td colSpan={10} className="px-6 py-4 text-center text-stone-500">
+                  <td colSpan={9} className="px-6 py-4 text-center text-stone-500">
                     No hay resultados con los filtros aplicados.
                   </td>
                 </tr>
