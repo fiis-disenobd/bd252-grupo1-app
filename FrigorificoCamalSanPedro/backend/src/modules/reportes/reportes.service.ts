@@ -5,6 +5,7 @@ import { StockQueryDto } from './dto/stock-query.dto';
 import { TrazabilidadQueryDto } from './dto/trazabilidad-query.dto';
 import { TransporteQueryDto } from './dto/transporte-query.dto';
 import { TopClientesQueryDto } from './dto/top-clientes-query.dto';
+import { ProgramacionQueryDto } from './dto/programacion-query.dto';
 import PDFDocument = require('pdfkit');
 
 type PdfDoc = PDFKit.PDFDocument;
@@ -67,6 +68,15 @@ export class ReportesService {
 
     const where = clauses.length ? `WHERE p.estado_pago = 'PAGADO' AND ${clauses.join(' AND ')}` : "WHERE p.estado_pago = 'PAGADO'";
     return { where, params, antiguedadParamIndex: params.length };
+  }
+
+  private buildProgramacionParams(filters: ProgramacionQueryDto) {
+    const reporteId = filters.reporteId ? Number(filters.reporteId) : null;
+    const programacionId = filters.programacionId ? Number(filters.programacionId) : null;
+    return {
+      reporteId: Number.isNaN(reporteId) ? null : reporteId,
+      programacionId: Number.isNaN(programacionId) ? null : programacionId
+    };
   }
 
   async resumenTransporte(filters: TransporteQueryDto) {
@@ -189,6 +199,25 @@ export class ReportesService {
       estadoEntrega: row.estado_entrega,
       retrasoMinutos: Number(row.retraso_minutos ?? 0)
     }));
+  }
+
+  async resumenProgramacion(filters: ProgramacionQueryDto) {
+    return {
+      totalProgramacionesActivas: 0,
+      totalEjecucionesHoy: 0,
+      exitos30d: 0,
+      tasaExito30d: null
+    };
+  }
+
+  async listaProgramaciones(filters: ProgramacionQueryDto) {
+    // Sin datos aún: retornar vacío para programaciones iniciales
+    return [];
+  }
+
+  async ejecucionesRecientes(filters: ProgramacionQueryDto) {
+    // Sin datos aún: retornar vacío para ejecuciones iniciales
+    return [];
   }
 
   async resumenTopClientes(filters: TopClientesQueryDto) {

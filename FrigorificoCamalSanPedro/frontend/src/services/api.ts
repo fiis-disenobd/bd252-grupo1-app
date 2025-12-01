@@ -37,6 +37,42 @@ export type ReportSummary = {
   variation?: string;
 };
 
+export type ProgramacionResumen = {
+  totalProgramacionesActivas: number;
+  totalEjecucionesHoy: number;
+  exitos30d: number;
+  tasaExito30d: number | null;
+};
+
+export type ProgramacionItem = {
+  programacionId: number;
+  nombre: string;
+  reporteId: number | null;
+  expresion: string | null;
+  horaReferencia: string | null;
+  zonaHoraria: string | null;
+  vigenteDesde: string | null;
+  vigenteHasta: string | null;
+  entregaAutomatica: boolean;
+  ultimaEjecucion: string | null;
+  proximaEjecucion: string | null;
+  exitos: number;
+  fallos: number;
+};
+
+export type EjecucionItem = {
+  ejecucionId: number;
+  reporteId: number | null;
+  programacionId: number | null;
+  fechaProgramada: string | null;
+  inicio: string | null;
+  fin: string | null;
+  estado: string | null;
+  mensajeEstado: string | null;
+  origen: string | null;
+  solicitadoPorUsuarioId: number | null;
+};
+
 export type TopClientesResumen = {
   totalClientes: number;
   clientesVip: number;
@@ -131,6 +167,12 @@ export const api = {
         descripcion: string;
       }>
     >(`/reportes/trazabilidad/reclamos?codigo=${encodeURIComponent(pedidoIdOrCodigo)}`),
+  programacionResumen: (params: URLSearchParams) =>
+    request<ProgramacionResumen>(withQuery('/reportes/programacion/resumen', params)),
+  programaciones: (params: URLSearchParams) =>
+    request<ProgramacionItem[]>(withQuery('/reportes/programacion/lista', params)),
+  programacionEjecuciones: (params: URLSearchParams) =>
+    request<EjecucionItem[]>(withQuery('/reportes/programacion/ejecuciones', params)),
   topClientesResumen: (params: URLSearchParams) =>
     request<TopClientesResumen>(withQuery('/reportes/top-clientes/resumen', params)),
   topClientesDetalle: (params: URLSearchParams) =>
