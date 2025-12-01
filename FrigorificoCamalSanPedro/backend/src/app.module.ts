@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ReportesModule } from './modules/reportes/reportes.module';
 import { AppController } from './app.controller';
+import { ArangoModule } from './modules/arango/arango.module';
+import { VentasModule } from './modules/ventas/ventas.module';
 
 @Module({
   imports: [
@@ -26,8 +28,10 @@ import { AppController } from './app.controller';
       autoLoadEntities: true,
       synchronize: false
     }),
-    ReportesModule
+    ReportesModule,
+    ArangoModule,
+    VentasModule
   ],
   controllers: [AppController]
 })
-export class AppModule {}
+export class AppModule { }

@@ -9,21 +9,23 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
-    "@nestjs/config": "^4.0.0",
     "@nestjs/typeorm": "^11.0.0",
+    "arangojs": "^10.1.2",
     "pdfkit": "^0.15.0",
+    "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "pg": "^8.13.1",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.20",
+    "undici": "^7.16.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/node": "^20.17.9",
     "@types/pdfkit": "^0.13.5",
-    "@types/express": "^5.0.0",
-    "typescript": "^5.4.5",
-    "ts-node-dev": "^2.0.0"
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
   }
 }
