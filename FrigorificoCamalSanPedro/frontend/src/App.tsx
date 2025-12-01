@@ -12,6 +12,7 @@ import ReporteTrazabilidad from './pages/gestion-reportes/ReporteTrazabilidad';
 import ReporteTransporte from './pages/gestion-reportes/ReporteTransporte';
 import ReporteTopClientes from './pages/gestion-reportes/ReporteTopClientes';
 import ReporteProgramacion from './pages/gestion-reportes/ReporteProgramacion';
+import AtencionCliente from './pages/gestion-cliente/AtencionCliente';
 
 const App = () => {
   return (
@@ -19,6 +20,7 @@ const App = () => {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="clientes" element={<Clientes />} />
+        <Route path="clientes/atencion" element={<AtencionCliente />} />
         <Route path="productos" element={<Productos />} />
         <Route path="ventas" element={<Ventas />} />
         <Route path="reclamos" element={<Reclamos />} />
