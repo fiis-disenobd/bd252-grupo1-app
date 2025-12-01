@@ -4,6 +4,8 @@ import { ReportesService } from './reportes.service';
 import { VentasDiaQueryDto } from './dto/ventas-dia-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
 import { TrazabilidadQueryDto } from './dto/trazabilidad-query.dto';
+import { TransporteQueryDto } from './dto/transporte-query.dto';
+import { TopClientesQueryDto } from './dto/top-clientes-query.dto';
 
 @Controller('reportes')
 export class ReportesController {
@@ -17,6 +19,26 @@ export class ReportesController {
   @Get('ventas-dia/resumen')
   resumen() {
     return this.reportesService.resumenVentasDia();
+  }
+
+  @Get('transporte/resumen')
+  resumenTransporte(@Query() query: TransporteQueryDto) {
+    return this.reportesService.resumenTransporte(query);
+  }
+
+  @Get('transporte/detalle')
+  detalleTransporte(@Query() query: TransporteQueryDto) {
+    return this.reportesService.detalleTransporte(query);
+  }
+
+  @Get('top-clientes/resumen')
+  resumenTopClientes(@Query() query: TopClientesQueryDto) {
+    return this.reportesService.resumenTopClientes(query);
+  }
+
+  @Get('top-clientes/detalle')
+  detalleTopClientes(@Query() query: TopClientesQueryDto) {
+    return this.reportesService.detalleTopClientes(query);
   }
 
   @Get('ventas-dia/detalle')

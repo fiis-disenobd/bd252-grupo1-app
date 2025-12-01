@@ -37,6 +37,49 @@ export type ReportSummary = {
   variation?: string;
 };
 
+export type TopClientesResumen = {
+  totalClientes: number;
+  clientesVip: number;
+  volumenTop10Kg: number;
+  descuentosTotalesSoles: number;
+  distribucion: Array<{ rangoVolumen: string; cantidadClientes: number }>;
+};
+
+export type TopClientesDetalle = {
+  ranking: number;
+  cliente: string;
+  ruc: string;
+  volumenKg: number;
+  montoTotal: number;
+  promMensual: number;
+  antiguedadAnios: number;
+  descuentoAntiguedadPct: number;
+  descuentoAplicadoSoles: number;
+  ultimaCompra: string;
+};
+
+export type TransporteResumen = {
+  totalViajes: number;
+  tiempoPromedioMin: number;
+  conRetraso: number;
+  porcentajeRetrasos: number;
+  enTransito: number;
+};
+
+export type TransporteDetalle = {
+  fecha: string;
+  idPedido: number;
+  cliente: string;
+  distrito: string;
+  pesoKg: number;
+  salida: string | null;
+  llegada: string | null;
+  duracion: string | null;
+  minutos: number | null;
+  estadoEntrega: string;
+  retrasoMinutos: number;
+};
+
 export const api = {
   health: () => request<HealthResponse>('/health'),
   reportSummary: () => request<ReportSummary[]>('/reportes/resumen'),
@@ -88,4 +131,12 @@ export const api = {
         descripcion: string;
       }>
     >(`/reportes/trazabilidad/reclamos?codigo=${encodeURIComponent(pedidoIdOrCodigo)}`),
+  topClientesResumen: (params: URLSearchParams) =>
+    request<TopClientesResumen>(withQuery('/reportes/top-clientes/resumen', params)),
+  topClientesDetalle: (params: URLSearchParams) =>
+    request<TopClientesDetalle[]>(withQuery('/reportes/top-clientes/detalle', params)),
+  transporteResumen: (params: URLSearchParams) =>
+    request<TransporteResumen>(withQuery('/reportes/transporte/resumen', params)),
+  transporteDetalle: (params: URLSearchParams) =>
+    request<TransporteDetalle[]>(withQuery('/reportes/transporte/detalle', params)),
 };
