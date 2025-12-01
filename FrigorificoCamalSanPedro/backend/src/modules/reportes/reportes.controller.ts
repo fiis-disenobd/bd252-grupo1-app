@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { ReportesService } from './reportes.service';
 import { VentasDiaQueryDto } from './dto/ventas-dia-query.dto';
@@ -7,6 +7,7 @@ import { TrazabilidadQueryDto } from './dto/trazabilidad-query.dto';
 import { TransporteQueryDto } from './dto/transporte-query.dto';
 import { TopClientesQueryDto } from './dto/top-clientes-query.dto';
 import { ProgramacionQueryDto } from './dto/programacion-query.dto';
+import { CrearProgramacionDto } from './dto/crear-programacion.dto';
 
 @Controller('reportes')
 export class ReportesController {
@@ -55,6 +56,11 @@ export class ReportesController {
   @Get('programacion/ejecuciones')
   ejecucionesProgramacion(@Query() query: ProgramacionQueryDto) {
     return this.reportesService.ejecucionesRecientes(query);
+  }
+
+  @Post('programacion')
+  crearProgramacion(@Body() body: CrearProgramacionDto) {
+    return this.reportesService.crearProgramacion(body);
   }
 
   @Get('ventas-dia/detalle')
