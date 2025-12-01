@@ -25,6 +25,32 @@ async function requestBlob(path: string): Promise<Blob> {
   return response.blob();
 }
 
+async function requestPatch<T, B = any>(path: string, body: B): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Solicitud fallida (${response.status}): ${text || 'sin detalle'}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function requestDelete<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: 'DELETE' });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Solicitud fallida (${response.status}): ${text || 'sin detalle'}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 async function requestPost<T, B = any>(path: string, body: B): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
@@ -73,6 +99,15 @@ export type ProgramacionItem = {
   proximaEjecucion: string | null;
   exitos: number;
   fallos: number;
+};
+
+export type ReporteCatalogo = {
+  reporteId: number;
+  nombre: string;
+  categoria: string;
+  version: string;
+  vigenteDesde: string | null;
+  vigenteHasta: string | null;
 };
 
 export type EjecucionItem = {
@@ -206,6 +241,14 @@ export const api = {
     request<EjecucionItem[]>(withQuery('/reportes/programacion/ejecuciones', params)),
   crearProgramacion: (payload: CrearProgramacionRequest) =>
     requestPost<CrearProgramacionResponse>('/reportes/programacion', payload),
+  cambiarEstadoProgramacion: (programacionId: number, activo: boolean) =>
+    requestPatch<{ programacionId: number; activo: boolean; vigenteHasta: string | null }>(
+      `/reportes/programacion/${programacionId}/estado`,
+      { activo }
+    ),
+  eliminarProgramacion: (programacionId: number) =>
+    requestDelete<{ programacionId: number }>(`/reportes/programacion/${programacionId}`),
+  catalogoReportes: () => request<ReporteCatalogo[]>('/reportes/catalogo'),
   topClientesResumen: (params: URLSearchParams) =>
     request<TopClientesResumen>(withQuery('/reportes/top-clientes/resumen', params)),
   topClientesDetalle: (params: URLSearchParams) =>

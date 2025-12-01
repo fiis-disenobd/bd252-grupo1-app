@@ -25,9 +25,7 @@ const ReporteTrazabilidad = () => {
           </button>
           <h2 className="text-3xl font-semibold text-stone-900">Trazabilidad de Pieza</h2>
         </div>
-        <button className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold">
-          ↓ Exportar Reporte
-        </button>
+        {/* Exportar deshabilitado/oculto por solicitud */}
       </div>
 
       <div className="bg-white border border-stone-200 rounded-2xl shadow-card p-6 space-y-4">

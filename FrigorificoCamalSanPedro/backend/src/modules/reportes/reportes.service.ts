@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { VentasDiaQueryDto } from './dto/ventas-dia-query.dto';
 import { StockQueryDto } from './dto/stock-query.dto';
@@ -23,6 +23,54 @@ type VentaDetalleRow = {
 @Injectable()
 export class ReportesService {
   constructor(private readonly dataSource: DataSource) {}
+
+  private async resolveCreadorId(preferredId?: number | null) {
+    const parsed = preferredId === undefined || preferredId === null ? null : Number(preferredId);
+    if (parsed && Number.isFinite(parsed)) {
+      return parsed;
+    }
+
+    const [row] = await this.dataSource.query(
+      `
+      SELECT usuario_id
+      FROM reportes.usuarios
+      WHERE estado = 'VIGENTE'
+      ORDER BY usuario_id
+      LIMIT 1;
+      `
+    );
+
+    if (!row?.usuario_id) {
+      throw new BadRequestException('No hay usuarios vigentes para asignar como creador de la programacion');
+    }
+
+    return Number(row.usuario_id);
+  }
+  async catalogoReportes() {
+    const rows = await this.dataSource.query(
+      `
+      SELECT
+        reporte_id   AS "reporteId",
+        nombre,
+        categoria,
+        version_metrica AS version,
+        vigente_desde   AS "vigenteDesde",
+        vigente_hasta   AS "vigenteHasta"
+      FROM reportes.reporte
+      WHERE vigente_hasta IS NULL OR vigente_hasta >= CURRENT_DATE
+      ORDER BY nombre;
+      `
+    );
+
+    return rows.map((row: any) => ({
+      reporteId: Number(row.reporteId ?? row.reporte_id ?? 0),
+      nombre: row.nombre,
+      categoria: row.categoria,
+      version: row.version,
+      vigenteDesde: row.vigenteDesde,
+      vigenteHasta: row.vigenteHasta
+    }));
+  }
 
   private buildTransporteFilters(filters: TransporteQueryDto) {
     const params: any[] = [];
@@ -55,19 +103,16 @@ export class ReportesService {
     const params: any[] = [];
     const clauses: string[] = [];
 
-    params.push(filters.fechaInicio ?? null);
-    clauses.push(`( $1::date IS NULL OR p.fecha_pedido >= $1::date )`);
-
-    params.push(filters.fechaFin ?? null);
-    clauses.push(`( $2::date IS NULL OR p.fecha_pedido <= $2::date )`);
-
     params.push(filters.cliente ?? null);
-    clauses.push(`( $3::text IS NULL OR c.nombre ILIKE '%' || $3 || '%' )`);
+    clauses.push(`( $1::text IS NULL OR c.nombre ILIKE '%' || $1 || '%' )`);
 
-    const antiguedadMin = Number(filters.antiguedadMin ?? 10);
-    params.push(Number.isNaN(antiguedadMin) ? 10 : antiguedadMin);
+    const antiguedadMin = Number(filters.antiguedadMin);
+    const antiguedadParam = Number.isNaN(antiguedadMin) ? null : antiguedadMin;
+    params.push(antiguedadParam);
+    clauses.push(`( $2::int IS NULL OR DATE_PART('year', AGE(CURRENT_DATE, c.fecha_alta)) >= $2::int )`);
 
-    const where = clauses.length ? `WHERE p.estado_pago = 'PAGADO' AND ${clauses.join(' AND ')}` : "WHERE p.estado_pago = 'PAGADO'";
+    const whereBase = "WHERE p.estado_pago = 'PAGADO'";
+    const where = clauses.length ? `${whereBase} AND ${clauses.join(' AND ')}` : whereBase;
     return { where, params, antiguedadParamIndex: params.length };
   }
 
@@ -357,62 +402,141 @@ export class ReportesService {
   }
 
   async crearProgramacion(dto: CrearProgramacionDto) {
-    if (dto.reporteId === undefined || dto.reporteId === null) {
-      throw new Error('reporteId es requerido');
-    }
-    if (!dto.nombre) {
-      throw new Error('nombre es requerido');
-    }
-    if (!dto.expresion) {
-      throw new Error('expresion es requerida');
-    }
-    if (!dto.horaReferencia) {
-      throw new Error('horaReferencia es requerida (HH:mm:ss)');
-    }
-    if (!dto.zonaHoraria) {
-      throw new Error('zonaHoraria es requerida (ej: America/Lima)');
-    }
-    if (!dto.vigenteDesde) {
-      throw new Error('vigenteDesde es requerido (YYYY-MM-DD)');
+    const reporteId = Number(dto.reporteId);
+    if (!Number.isFinite(reporteId)) {
+      throw new BadRequestException('reporteId es requerido y debe ser numerico');
     }
 
+    const nombre = `${dto.nombre ?? ''}`.trim();
+    if (!nombre) {
+      throw new BadRequestException('nombre es requerido');
+    }
+
+    const expresion = `${dto.expresion ?? ''}`.trim();
+    if (!expresion) {
+      throw new BadRequestException('expresion es requerida');
+    }
+
+    const horaRaw = `${dto.horaReferencia ?? ''}`.trim();
+    if (!horaRaw) {
+      throw new BadRequestException('horaReferencia es requerida (HH:mm o HH:mm:ss)');
+    }
+    const horaReferencia = horaRaw.length === 5 ? `${horaRaw}:00` : horaRaw;
+    if (!/^\d{2}:\d{2}(:\d{2})?$/.test(horaReferencia)) {
+      throw new BadRequestException('horaReferencia debe tener formato HH:mm o HH:mm:ss');
+    }
+
+    const zonaHoraria = `${dto.zonaHoraria ?? ''}`.trim();
+    if (!zonaHoraria) {
+      throw new BadRequestException('zonaHoraria es requerida (ej: America/Lima)');
+    }
+
+    const vigenteDesde = `${dto.vigenteDesde ?? ''}`.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(vigenteDesde)) {
+      throw new BadRequestException('vigenteDesde es requerido (YYYY-MM-DD)');
+    }
+
+    const vigenteHastaRaw = `${dto.vigenteHasta ?? ''}`.trim();
+    if (vigenteHastaRaw && !/^\d{4}-\d{2}-\d{2}$/.test(vigenteHastaRaw)) {
+      throw new BadRequestException('vigenteHasta debe tener formato YYYY-MM-DD');
+    }
+    const vigenteHasta = vigenteHastaRaw || null;
+
     const entrega = dto.entregaAutomatica ?? true;
+    const creadoPor = await this.resolveCreadorId(dto.creadoPorUsuarioId);
     const now = new Date();
 
     const params = [
-      dto.reporteId,
-      dto.nombre,
-      dto.expresion,
-      dto.horaReferencia,
-      dto.zonaHoraria,
-      dto.vigenteDesde,
-      dto.vigenteHasta ?? null,
+      reporteId,
+      nombre,
+      expresion,
+      horaReferencia,
+      zonaHoraria,
+      vigenteDesde,
+      vigenteHasta,
       entrega,
-      dto.creadoPorUsuarioId ?? null,
+      creadoPor,
       now
     ];
 
-    const [row] = await this.dataSource.query(
+    try {
+      const [row] = await this.dataSource.query(
+        `
+        INSERT INTO reportes.programacion (
+          reporte_id,
+          nombre_programacion,
+          expresion_programacion,
+          hora_referencia,
+          zona_horaria,
+          vigente_desde,
+          vigente_hasta,
+          entrega_automatica,
+          creado_por_usuario_id,
+          fecha_creacion
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING programacion_id;
+        `,
+        params
+      );
+
+      return { programacionId: Number(row?.programacion_id ?? 0) };
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message ? error.message : 'No se pudo crear la programacion';
+      throw new BadRequestException(message);
+    }
+  }
+
+  async actualizarEstadoProgramacion(id: string, activo: boolean) {
+    const programacionId = Number(id);
+    if (!Number.isFinite(programacionId)) {
+      throw new BadRequestException('programacionId invalido');
+    }
+
+    const vigencia = activo ? null : new Date();
+
+    const result = await this.dataSource.query(
       `
-      INSERT INTO reportes.programacion (
-        reporte_id,
-        nombre_programacion,
-        expresion_programacion,
-        hora_referencia,
-        zona_horaria,
-        vigente_desde,
-        vigente_hasta,
-        entrega_automatica,
-        creado_por_usuario_id,
-        fecha_creacion
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING programacion_id;
+      UPDATE reportes.programacion
+      SET vigente_hasta = $2
+      WHERE programacion_id = $1
+      RETURNING programacion_id, vigente_hasta;
       `,
-      params
+      [programacionId, vigencia]
     );
 
-    return { programacionId: Number(row?.programacion_id ?? 0) };
+    if (!result.length) {
+      throw new NotFoundException('Programacion no encontrada');
+    }
+
+    return {
+      programacionId,
+      activo,
+      vigenteHasta: result[0].vigente_hasta
+    };
+  }
+
+  async eliminarProgramacion(id: string) {
+    const programacionId = Number(id);
+    if (!Number.isFinite(programacionId)) {
+      throw new BadRequestException('programacionId invalido');
+    }
+
+    const result = await this.dataSource.query(
+      `
+      DELETE FROM reportes.programacion
+      WHERE programacion_id = $1
+      RETURNING programacion_id;
+      `,
+      [programacionId]
+    );
+
+    if (!result.length) {
+      throw new NotFoundException('Programacion no encontrada');
+    }
+
+    return { programacionId };
   }
 
   async resumenTopClientes(filters: TopClientesQueryDto) {
@@ -452,7 +576,7 @@ export class ReportesService {
           (
             SELECT COUNT(*)
             FROM ventas.cliente c
-            WHERE DATE_PART('year', AGE(CURRENT_DATE, c.fecha_alta)) >= $${antiguedadIdx}::int
+            WHERE DATE_PART('year', AGE(CURRENT_DATE, c.fecha_alta)) >= COALESCE($${antiguedadIdx}::int, 10)
           ) AS clientes_vip_10_anios,
           (SELECT COALESCE(SUM(volumen_kg), 0) FROM top10) AS volumen_top10_kg,
           (
@@ -532,8 +656,8 @@ export class ReportesService {
   }
 
   async detalleTopClientes(filters: TopClientesQueryDto) {
-    const { params } = this.buildTopClientesFilters(filters);
-    const queryParams = [params[0] ?? null, params[1] ?? null, params[2] ?? null];
+    const { where, params } = this.buildTopClientesFilters(filters);
+    const queryParams = [params[0] ?? null, params[1] ?? null];
 
     const rows = await this.dataSource.query(
       `
@@ -549,10 +673,7 @@ export class ReportesService {
         FROM ventas.cliente c
         JOIN ventas.pedido  p ON p.id_cliente = c.id_cliente
         LEFT JOIN ventas.venta   v ON v.id_pedido  = p.id_pedido
-        WHERE p.estado_pago = 'PAGADO'
-          AND ( $1::date IS NULL OR p.fecha_pedido >= $1::date )
-          AND ( $2::date IS NULL OR p.fecha_pedido <= $2::date )
-          AND ( $3::text IS NULL OR c.nombre ILIKE '%' || $3 || '%' )
+        ${where}
         GROUP BY
             c.id_cliente,
             c.nombre,

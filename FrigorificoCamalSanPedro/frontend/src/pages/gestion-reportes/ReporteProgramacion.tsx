@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProgramacionResumen, useProgramaciones, useEjecucionesProgramacion } from '@/features/programacion/hooks';
 import { api } from '@/services/api';
+import type { ReporteCatalogo } from '@/services/api';
 
 const formatDateTime = (value: string | null) => {
   if (!value) return '—';
@@ -17,6 +18,12 @@ const ReporteProgramacion = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [plantilla, setPlantilla] = useState('');
+  const [reportes, setReportes] = useState<ReporteCatalogo[]>([]);
+  const [reportesLoading, setReportesLoading] = useState(false);
+  const [reportesError, setReportesError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; nombre: string } | null>(null);
   const [form, setForm] = useState({
     reporteId: '',
     nombre: '',
@@ -33,6 +40,28 @@ const ReporteProgramacion = () => {
     params.set('refresh', String(refreshFlag));
     return params;
   }, [refreshFlag]);
+
+  useEffect(() => {
+    let mounted = true;
+    setReportesLoading(true);
+    (async () => {
+      try {
+        const data = await api.catalogoReportes();
+        if (!mounted) return;
+        setReportes(data);
+        if (!form.reporteId && data.length) {
+          setForm((f) => ({ ...f, reporteId: `${data[0].reporteId}` }));
+        }
+      } catch (err) {
+        if (mounted) setReportesError((err as Error).message);
+      } finally {
+        if (mounted) setReportesLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [form.reporteId]);
 
   const resumen = useProgramacionResumen(searchParams);
   const programaciones = useProgramaciones(searchParams);
@@ -55,6 +84,7 @@ const ReporteProgramacion = () => {
   ];
 
   return (
+    <>
     <section className="space-y-8">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -74,13 +104,7 @@ const ReporteProgramacion = () => {
           >
             + Nueva Programación
           </button>
-          <button
-            onClick={() => setRefreshFlag((v) => v + 1)}
-            className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold"
-          >
-            ↻ Actualizar
-          </button>
-        </div>
+                  </div>
       </div>
 
       {apiError && (
@@ -110,6 +134,9 @@ const ReporteProgramacion = () => {
         <div className="px-6 py-4 border-b border-stone-200">
           <h3 className="text-lg font-semibold text-stone-900">Programaciones Configuradas</h3>
         </div>
+        {actionError && (
+          <div className="px-6 py-3 text-sm text-red-700 bg-red-50 border-b border-red-100">{actionError}</div>
+        )}
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm text-stone-700">
             <thead className="bg-stone-50 text-left text-xs uppercase tracking-widest text-stone-500">
@@ -122,6 +149,7 @@ const ReporteProgramacion = () => {
                 <th className="px-5 py-3">Próxima Ejecución</th>
                 <th className="px-5 py-3">Estado</th>
                 <th className="px-5 py-3">Éxito/fallos</th>
+                <th className="px-5 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
@@ -157,6 +185,43 @@ const ReporteProgramacion = () => {
                       </td>
                       <td className="px-5 py-4">
                         {prog.exitos}/{prog.fallos}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              try {
+                                setActionError(null);
+                                setActionLoadingId(prog.programacionId);
+                                await api.cambiarEstadoProgramacion(prog.programacionId, !esVigente);
+                                setRefreshFlag((v) => v + 1);
+                              } catch (err) {
+                                setActionError((err as Error).message);
+                              } finally {
+                                setActionLoadingId(null);
+                              }
+                            }}
+                            disabled={actionLoadingId === prog.programacionId}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                              esVigente
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            } ${actionLoadingId === prog.programacionId ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-80'}`}
+                          >
+                            {esVigente ? 'Desactivar' : 'Activar'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              setDeleteTarget({ id: prog.programacionId, nombre: prog.nombre });
+                            }}
+                            disabled={actionLoadingId === prog.programacionId}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold border border-rose-200 text-rose-700 bg-rose-50 ${
+                              actionLoadingId === prog.programacionId ? 'opacity-60 cursor-not-allowed' : 'hover:bg-rose-100'
+                            }`}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -247,14 +312,23 @@ const ReporteProgramacion = () => {
             )}
             <div className="grid gap-3">
               <label className="flex flex-col text-sm text-stone-700 gap-1">
-                <span className="font-semibold">Reporte ID *</span>
-                <input
-                  type="number"
-                  min={1}
+                <span className="font-semibold">Reporte *</span>
+                <select
                   value={form.reporteId}
                   onChange={(e) => setForm((f) => ({ ...f, reporteId: e.target.value }))}
                   className="rounded-lg border border-stone-200 px-3 py-2 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                />
+                >
+                  {reportesLoading && <option value="">Cargando reportes...</option>}
+                  {!reportesLoading && <option value="">Selecciona un reporte</option>}
+                  {reportes.map((r) => (
+                    <option key={r.reporteId} value={r.reporteId}>
+                      {r.reporteId} · {r.nombre} ({r.categoria} · {r.version})
+                    </option>
+                  ))}
+                </select>
+                {reportesError && (
+                  <span className="text-xs text-red-600">No se pudieron cargar los reportes: {reportesError}</span>
+                )}
               </label>
               <label className="flex flex-col text-sm text-stone-700 gap-1">
                 <span className="font-semibold">Nombre *</span>
@@ -382,11 +456,15 @@ const ReporteProgramacion = () => {
                     if (!form.expresion || !form.horaReferencia || !form.zonaHoraria || !form.vigenteDesde) {
                       throw new Error('Expresión, Hora, Zona horaria y Vigente desde son obligatorios');
                     }
+                    const horaReferencia = form.horaReferencia && form.horaReferencia.length === 5
+                      ? `${form.horaReferencia}:00`
+                      : form.horaReferencia;
+
                     await api.crearProgramacion({
                       reporteId: Number(form.reporteId),
                       nombre: form.nombre,
                       expresion: form.expresion || undefined,
-                      horaReferencia: form.horaReferencia || undefined,
+                      horaReferencia: horaReferencia || undefined,
                       zonaHoraria: form.zonaHoraria || undefined,
                       vigenteDesde: form.vigenteDesde || undefined,
                       vigenteHasta: form.vigenteHasta || undefined,
@@ -412,6 +490,55 @@ const ReporteProgramacion = () => {
         </div>
       )}
     </section>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold">!</div>
+              <div className="space-y-1">
+                <h4 className="text-lg font-semibold text-stone-900">Eliminar programación</h4>
+                <p className="text-sm text-stone-600">
+                  ¿Seguro que deseas eliminar la programación <span className="font-semibold">{deleteTarget.nombre}</span>? Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            {actionError && <div className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{actionError}</div>}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-lg border border-stone-300 text-stone-700 bg-white hover:bg-stone-50 text-sm font-semibold"
+                disabled={actionLoadingId === deleteTarget.id}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!deleteTarget) return;
+                  try {
+                    setActionError(null);
+                    setActionLoadingId(deleteTarget.id);
+                    await api.eliminarProgramacion(deleteTarget.id);
+                    setDeleteTarget(null);
+                    setRefreshFlag((v) => v + 1);
+                  } catch (err) {
+                    setActionError((err as Error).message);
+                  } finally {
+                    setActionLoadingId(null);
+                  }
+                }}
+                disabled={actionLoadingId === deleteTarget.id}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 ${
+                  actionLoadingId === deleteTarget.id ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
+              >
+                {actionLoadingId === deleteTarget.id ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
