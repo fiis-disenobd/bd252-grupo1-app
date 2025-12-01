@@ -65,15 +65,67 @@ export class VentasService {
     }
 
     async findAll(): Promise<Venta[]> {
-        const collectionExists = await this.collection.exists();
-        if (!collectionExists) {
-            return [];
+        console.log('DEBUG: Starting findAll');
+        try {
+            const collectionExists = await this.collection.exists();
+            console.log('DEBUG: Collection ventas exists:', collectionExists);
+
+            if (!collectionExists) {
+                console.log('DEBUG: Collection does not exist');
+                return [];
+            }
+
+            // Check count
+            const countCursor = await this.db.query(aql`RETURN LENGTH(ventas)`);
+            const count = await countCursor.next();
+            console.log('DEBUG: Total documents in ventas:', count);
+
+            const cursor = await this.db.query(aql`
+              FOR v IN ventas
+              SORT v.fecha DESC
+              RETURN v
+            `);
+            const results = await cursor.all();
+            console.log('DEBUG: Results returned:', results.length);
+            return results;
+        } catch (e) {
+            console.error('DEBUG: Error in findAll:', e);
+            throw e;
         }
-        const cursor = await this.db.query(aql`
-      FOR v IN ventas
-      SORT v.fecha DESC
-      RETURN v
-    `);
-        return await cursor.all();
+    }
+    async findByClient(clienteId: number): Promise<Venta[]> {
+        console.log(`DEBUG: findByClient called for id: ${clienteId}`);
+        try {
+            const collectionExists = await this.collection.exists();
+            if (!collectionExists) {
+                console.log('DEBUG: Collection ventas does not exist');
+                return [];
+            }
+            const cursor = await this.db.query(aql`
+                FOR v IN ventas
+                FILTER v.clienteId == ${clienteId} OR v.clienteId == ${String(clienteId)}
+                SORT v.fecha DESC
+                RETURN v
+            `);
+            const results = await cursor.all();
+            console.log(`DEBUG: Found ${results.length} sales for client ${clienteId}`);
+            return results;
+        } catch (error) {
+            console.error('DEBUG: Error in findByClient:', error);
+            throw error;
+        }
+    }
+    async updateStatus(id: string, estado: string): Promise<any> {
+        try {
+            const collectionExists = await this.collection.exists();
+            if (!collectionExists) {
+                throw new Error('Collection ventas does not exist');
+            }
+            await this.collection.update(id, { estado });
+            return { success: true, id, estado };
+        } catch (error) {
+            console.error('Error updating status:', error);
+            throw error;
+        }
     }
 }

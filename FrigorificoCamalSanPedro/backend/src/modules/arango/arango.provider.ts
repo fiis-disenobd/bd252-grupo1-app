@@ -21,12 +21,13 @@ export const ArangoProvider: Provider = {
         const db = new Database({
             url: configService.get<string>('ARANGO_URL'),
             databaseName: configService.get<string>('ARANGO_DB_NAME'),
-            auth: {
-                username: configService.get<string>('ARANGO_USER'),
-                password: configService.get<string>('ARANGO_PASSWORD'),
-            },
             agent,
-        });
+        } as any);
+
+        db.useBasicAuth(
+            configService.get<string>('ARANGO_USER') || '',
+            configService.get<string>('ARANGO_PASSWORD') || ''
+        );
 
         return db;
     },

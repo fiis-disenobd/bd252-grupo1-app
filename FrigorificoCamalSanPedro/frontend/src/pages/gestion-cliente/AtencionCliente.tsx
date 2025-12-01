@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { API_BASE_URL } from '../../services/api';
 
 type SolicitudDoc = {
   id_solicitud: number;
@@ -42,6 +43,29 @@ const AtencionCliente = () => {
   const [searchResult, setSearchResult] = useState<ClienteData | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  // Purchase History State
+  const [compras, setCompras] = useState<any[]>([]);
+  const [loadingCompras, setLoadingCompras] = useState(false);
+
+  const fetchCompras = async (clienteId: number) => {
+    setLoadingCompras(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/ventas/cliente/${clienteId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCompras(data);
+      } else {
+        console.error('Error fetching compras');
+        setCompras([]);
+      }
+    } catch (error) {
+      console.error('Error fetching compras:', error);
+      setCompras([]);
+    } finally {
+      setLoadingCompras(false);
+    }
+  };
 
   const loadSolicitudesDoc = async () => {
     const { data: rpcData, error } = await supabase.rpc('listar_solicitudes_docu');
@@ -91,6 +115,7 @@ const AtencionCliente = () => {
 
       if (data && data.length > 0) {
         setSearchResult(data[0]);
+        fetchCompras(data[0].id_cliente);
       } else {
         setSearchError('No se encontraron clientes con ese criterio.');
       }
@@ -100,6 +125,8 @@ const AtencionCliente = () => {
       setSearching(false);
     }
   };
+
+
 
   const handleRevisar = (s: SolicitudDoc) => {
     setSelectedSolicitud(s);
@@ -374,9 +401,52 @@ const AtencionCliente = () => {
                 {/* Historial de Compras */}
                 <div className="bg-white border border-stone-200 rounded-xl shadow-sm p-6 max-w-4xl mx-auto">
                   <h3 className="text-xl font-bold text-stone-800 mb-4">Historial de Compras</h3>
-                  <div className="bg-stone-50 rounded-lg p-8 text-center border border-dashed border-stone-300">
-                    <p className="text-stone-500">No hay historial de compras disponible.</p>
-                  </div>
+                  {loadingCompras ? (
+                    <div className="text-center py-8 text-stone-500">Cargando historial...</div>
+                  ) : compras.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm border border-stone-200">
+                        <thead className="bg-stone-100 text-stone-700">
+                          <tr>
+                            <th className="px-4 py-2 text-left border-b">Fecha</th>
+                            <th className="px-4 py-2 text-left border-b">Productos</th>
+                            <th className="px-4 py-2 text-right border-b">Total</th>
+                            <th className="px-4 py-2 text-center border-b">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {compras.map((compra, idx) => (
+                            <tr key={idx} className="border-b hover:bg-stone-50">
+                              <td className="px-4 py-2 text-stone-600">
+                                {new Date(compra.fecha).toLocaleDateString()} {new Date(compra.fecha).toLocaleTimeString()}
+                              </td>
+                              <td className="px-4 py-2 text-stone-600">
+                                <ul className="list-disc list-inside">
+                                  {compra.items.map((item: any, i: number) => (
+                                    <li key={i}>
+                                      {item.nombre} x {item.cantidad} ({item.unidad})
+                                    </li>
+                                  ))}
+                                </ul>
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold text-stone-800">
+                                S/ {compra.total.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${compra.estado === 'completado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {compra.estado}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="bg-stone-50 rounded-lg p-8 text-center border border-dashed border-stone-300">
+                      <p className="text-stone-500">No hay historial de compras disponible.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -115,8 +115,25 @@ const Clientes = () => {
       setMessage({ type: 'success', text: 'Cliente registrado correctamente. Continua con la documentacion.' });
       setForm(initialState);
     }
-
     setSubmitting(false);
+  };
+
+  const fetchLatestObservation = async (idSolicitud: number) => {
+    try {
+      const { data: latestRev } = await supabase
+        .from('revision')
+        .select('comentario, documento_enviado!inner(id_solicitud)')
+        .eq('documento_enviado.id_solicitud', idSolicitud)
+        .order('fecha_hora', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestRev?.comentario) {
+        setObservacion(latestRev.comentario);
+      }
+    } catch (err) {
+      console.error('Error fetching latest observation:', err);
+    }
   };
 
   const loadDocsByCodigo = async (codigo: string) => {
@@ -133,7 +150,6 @@ const Clientes = () => {
       if (firstWithDoc.id_solicitud) {
         setSolicitudId(firstWithDoc.id_solicitud);
 
-        // Fetch actual status from solicitud_registro
         const { data: solData } = await supabase
           .from('solicitud_registro')
           .select('estado_actual')
@@ -143,11 +159,10 @@ const Clientes = () => {
         const currentStatus = solData?.estado_actual;
         if (currentStatus) setEstadoSolicitud(currentStatus);
 
-        // Check if T&C already accepted
         const { data: tycData } = await supabase
           .from('aceptacion_tyc')
           .select('id_aceptacion')
-          .eq('id_cliente', firstWithDoc.id_cliente) // Need to ensure id_cliente is available here or fetch it
+          .eq('id_cliente', firstWithDoc.id_cliente)
           .maybeSingle();
 
         if (tycData) {
@@ -182,19 +197,22 @@ const Clientes = () => {
             if (currentStatus === 'Conf') {
               setCurrentStep(3);
             } else if (revData.resultado === 'Observado') {
+              setEstadoSolicitud('Observado');
               setMessage({ type: 'error', text: 'Tu documento ha sido observado' });
+              void fetchLatestObservation(firstWithDoc.id_solicitud);
             } else if (revData.resultado === 'Aprobado') {
               setCurrentStep(2);
               setShowApprovalModal(true);
             }
           } else {
-            // Fallback
             if (firstWithDoc.observacion) setObservacion(firstWithDoc.observacion);
 
             if (currentStatus === 'Conf') {
               setCurrentStep(3);
             } else if (currentStatus === 'Observado' || firstWithDoc.estado_solicitud === 'Observado') {
+              setEstadoSolicitud('Observado');
               setMessage({ type: 'error', text: 'Tu documento ha sido observado' });
+              void fetchLatestObservation(firstWithDoc.id_solicitud);
             } else if (currentStatus === 'Cond' || currentStatus === 'Aprobado' || firstWithDoc.estado_solicitud === 'Cond') {
               setCurrentStep(2);
               setShowApprovalModal(true);
@@ -224,7 +242,6 @@ const Clientes = () => {
       const first = data.find((item: any) => item.archivo || item.nombre_archivo) ?? data[0];
       const filePath = first.archivo ?? first.nombre_archivo;
 
-      // Fetch actual status from solicitud_registro
       const { data: solData } = await supabase
         .from('solicitud_registro')
         .select('estado_actual')
@@ -234,8 +251,6 @@ const Clientes = () => {
       const currentStatus = solData?.estado_actual;
       if (currentStatus) setEstadoSolicitud(currentStatus);
 
-      // Check if T&C already accepted
-      // We need client ID. If not in first, fetch it.
       let clientId = first.id_cliente;
       if (!clientId && solicitudId) {
         const { data: solClient } = await supabase.from('solicitud_registro').select('id_cliente').eq('id_solicitud', solicitudId).single();
@@ -282,19 +297,22 @@ const Clientes = () => {
           if (currentStatus === 'Conf') {
             setCurrentStep(3);
           } else if (revData.resultado === 'Observado') {
+            setEstadoSolicitud('Observado');
             setMessage({ type: 'error', text: 'Tu documento ha sido observado.' });
+            void fetchLatestObservation(idSolicitud);
           } else if (revData.resultado === 'Aprobado') {
             setCurrentStep(2);
             setShowApprovalModal(true);
           }
         } else {
-          // Fallback
           if (first.observacion) setObservacion(first.observacion);
 
           if (currentStatus === 'Conf') {
             setCurrentStep(3);
           } else if (currentStatus === 'Observado' || first.estado_validacion === 'Observado') {
+            setEstadoSolicitud('Observado');
             setMessage({ type: 'error', text: 'Tu documento ha sido observado' });
+            void fetchLatestObservation(idSolicitud);
           } else if (currentStatus === 'Cond' || currentStatus === 'Aprobado' || first.estado_validacion === 'Aprobado') {
             setCurrentStep(2);
             setShowApprovalModal(true);
@@ -553,7 +571,7 @@ const Clientes = () => {
       )}
 
       {/* Alerta de En Revision */}
-      {docStatus === 'EnRevision' && estadoSolicitud !== 'Aprobado' && estadoSolicitud !== 'Observado' && (
+      {docStatus === 'EnRevision' && lastUpload && estadoSolicitud !== 'Aprobado' && estadoSolicitud !== 'Observado' && (
         <div className="w-full max-w-md p-4 rounded-lg border bg-blue-50 border-blue-200 text-blue-700 animate-in fade-in slide-in-from-top-2">
           <p className="text-sm font-bold mb-1">Pendiente de Aprobación</p>
           <p className="text-sm">Tu documento ha sido enviado y está siendo revisado por nuestro equipo.</p>
@@ -561,10 +579,10 @@ const Clientes = () => {
       )}
 
       {/* Alerta de Observación */}
-      {estadoSolicitud === 'Observado' && observacion && (
+      {estadoSolicitud === 'Observado' && (
         <div className="w-full max-w-md p-4 rounded-lg border bg-red-50 border-red-200 text-red-700 animate-pulse">
           <p className="text-sm font-bold mb-1">Documentación Observada:</p>
-          <p className="text-sm">{observacion}</p>
+          <p className="text-sm">{observacion || 'Tu documento tiene observaciones. Por favor sube uno nuevo.'}</p>
         </div>
       )}
 
@@ -587,11 +605,11 @@ const Clientes = () => {
         />
         <div className="space-y-3 pointer-events-none">
           <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto text-primary text-xl">
-            📄
+            {estadoSolicitud === 'Observado' ? '⚠️' : '📄'}
           </div>
           <div>
             <p className="font-semibold text-stone-700">
-              {selectedFile ? selectedFile.name : 'Haz clic para subir o arrastra aqui'}
+              {selectedFile ? selectedFile.name : estadoSolicitud === 'Observado' ? 'Sube tu documento corregido aquí' : 'Haz clic para subir o arrastra aqui'}
             </p>
             <p className="text-xs text-stone-400 mt-1">PDF, JPG o PNG (Max. 5MB)</p>
           </div>
@@ -811,6 +829,8 @@ const Clientes = () => {
       </button>
     </div>
   );
+
+
 
   return (
     <section className="space-y-8">

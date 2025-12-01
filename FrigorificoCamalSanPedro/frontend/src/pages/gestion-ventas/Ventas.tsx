@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../services/api';
 
 interface VentaItem {
   productoId: number;
@@ -35,7 +36,7 @@ const Ventas = () => {
   const fetchVentas = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/ventas');
+      const response = await fetch(`${API_BASE_URL}/ventas`);
       if (response.ok) {
         const data = await response.json();
         setVentas(data);
@@ -77,7 +78,7 @@ const Ventas = () => {
     };
 
     try {
-      const response = await fetch('http://localhost:3000/ventas', {
+      const response = await fetch(`${API_BASE_URL}/ventas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newVenta)
@@ -96,6 +97,27 @@ const Ventas = () => {
       alert('Error de conexión');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    if (!confirm(`¿Estás seguro de cambiar el estado a ${newStatus}?`)) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/ventas/${id}/estado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: newStatus })
+      });
+
+      if (response.ok) {
+        fetchVentas();
+      } else {
+        alert('Error al actualizar estado');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Error de conexión');
     }
   };
 
@@ -251,9 +273,30 @@ const Ventas = () => {
                   </td>
                   <td className="px-6 py-4 font-bold text-stone-900">S/ {venta.total.toFixed(2)}</td>
                   <td className="px-6 py-4">
-                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 uppercase">
-                      {venta.estado}
-                    </span>
+                    <div className="flex flex-col gap-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold text-center uppercase ${venta.estado === 'pagado' ? 'bg-emerald-100 text-emerald-700' :
+                        venta.estado === 'anulado' ? 'bg-red-100 text-red-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                        {venta.estado}
+                      </span>
+                      {venta.estado === 'pendiente' && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleStatusChange(venta._key!, 'pagado')}
+                            className="px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 transition"
+                          >
+                            Pagar
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange(venta._key!, 'anulado')}
+                            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition"
+                          >
+                            Anular
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
