@@ -25,6 +25,21 @@ async function requestBlob(path: string): Promise<Blob> {
   return response.blob();
 }
 
+async function requestPost<T, B = any>(path: string, body: B): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Solicitud fallida (${response.status}): ${text || 'sin detalle'}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 export type HealthResponse = {
   status: string;
 };
@@ -71,6 +86,22 @@ export type EjecucionItem = {
   mensajeEstado: string | null;
   origen: string | null;
   solicitadoPorUsuarioId: number | null;
+};
+
+export type CrearProgramacionRequest = {
+  reporteId: number;
+  nombre: string;
+  expresion?: string;
+  horaReferencia?: string;
+  zonaHoraria?: string;
+  vigenteDesde?: string;
+  vigenteHasta?: string;
+  entregaAutomatica?: boolean;
+  creadoPorUsuarioId?: number;
+};
+
+export type CrearProgramacionResponse = {
+  programacionId: number;
 };
 
 export type TopClientesResumen = {
@@ -173,6 +204,8 @@ export const api = {
     request<ProgramacionItem[]>(withQuery('/reportes/programacion/lista', params)),
   programacionEjecuciones: (params: URLSearchParams) =>
     request<EjecucionItem[]>(withQuery('/reportes/programacion/ejecuciones', params)),
+  crearProgramacion: (payload: CrearProgramacionRequest) =>
+    requestPost<CrearProgramacionResponse>('/reportes/programacion', payload),
   topClientesResumen: (params: URLSearchParams) =>
     request<TopClientesResumen>(withQuery('/reportes/top-clientes/resumen', params)),
   topClientesDetalle: (params: URLSearchParams) =>

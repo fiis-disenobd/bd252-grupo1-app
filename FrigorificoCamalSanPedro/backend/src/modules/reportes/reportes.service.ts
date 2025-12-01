@@ -6,6 +6,7 @@ import { TrazabilidadQueryDto } from './dto/trazabilidad-query.dto';
 import { TransporteQueryDto } from './dto/transporte-query.dto';
 import { TopClientesQueryDto } from './dto/top-clientes-query.dto';
 import { ProgramacionQueryDto } from './dto/programacion-query.dto';
+import { CrearProgramacionDto } from './dto/crear-programacion.dto';
 import PDFDocument = require('pdfkit');
 
 type PdfDoc = PDFKit.PDFDocument;
@@ -202,22 +203,216 @@ export class ReportesService {
   }
 
   async resumenProgramacion(filters: ProgramacionQueryDto) {
+    const { reporteId, programacionId } = this.buildProgramacionParams(filters);
+    const params = [reporteId ?? null, programacionId ?? null];
+
+    const [row] = await this.dataSource.query(
+      `
+      WITH prog_activas AS (
+          SELECT COUNT(*) AS total_programaciones_activas
+          FROM reportes.programacion p
+          WHERE (p.vigente_hasta IS NULL OR p.vigente_hasta >= CURRENT_DATE)
+            AND ( $1::int IS NULL OR p.reporte_id = $1 )
+            AND ( $2::int IS NULL OR p.programacion_id = $2 )
+      ),
+      ejec_hoy AS (
+          SELECT COUNT(*) AS total_ejecuciones_hoy
+          FROM reportes.ejecucion e
+          WHERE e.inicio::date = CURRENT_DATE
+            AND ( $1::int IS NULL OR e.reporte_id = $1 )
+            AND ( $2::int IS NULL OR e.programacion_id = $2 )
+      ),
+      exitos_30d AS (
+          SELECT
+              COUNT(*) FILTER ( WHERE e.estado::text = 'EXITOSA' ) AS exitos_30d,
+              COUNT(*) AS total_30d
+          FROM reportes.ejecucion e
+          WHERE e.inicio::date >= CURRENT_DATE - INTERVAL '30 days'
+            AND ( $1::int IS NULL OR e.reporte_id = $1 )
+            AND ( $2::int IS NULL OR e.programacion_id = $2 )
+      )
+      SELECT
+          pa.total_programaciones_activas,
+          eh.total_ejecuciones_hoy,
+          ex.exitos_30d,
+          CASE
+              WHEN ex.total_30d = 0 THEN NULL
+              ELSE ROUND(100.0 * ex.exitos_30d / ex.total_30d, 1)
+          END AS tasa_exito_30d
+      FROM prog_activas pa
+      CROSS JOIN ejec_hoy  eh
+      CROSS JOIN exitos_30d ex;
+      `,
+      params
+    );
+
     return {
-      totalProgramacionesActivas: 0,
-      totalEjecucionesHoy: 0,
-      exitos30d: 0,
-      tasaExito30d: null
+      totalProgramacionesActivas: Number(row?.total_programaciones_activas ?? 0),
+      totalEjecucionesHoy: Number(row?.total_ejecuciones_hoy ?? 0),
+      exitos30d: Number(row?.exitos_30d ?? 0),
+      tasaExito30d:
+        row?.tasa_exito_30d === null || row?.tasa_exito_30d === undefined ? null : Number(row.tasa_exito_30d)
     };
   }
 
   async listaProgramaciones(filters: ProgramacionQueryDto) {
-    // Sin datos aún: retornar vacío para programaciones iniciales
-    return [];
+    const { reporteId, programacionId } = this.buildProgramacionParams(filters);
+    const params = [reporteId ?? null, programacionId ?? null];
+
+    const rows = await this.dataSource.query(
+      `
+      SELECT
+        p.programacion_id,
+        p.nombre_programacion,
+        p.reporte_id,
+        p.expresion_programacion,
+        p.hora_referencia,
+        p.zona_horaria,
+        p.vigente_desde,
+        p.vigente_hasta,
+        p.entrega_automatica,
+        MAX(e.inicio) FILTER (WHERE e.inicio IS NOT NULL) AS ultima_ejecucion,
+        MIN(e.fecha_programada) FILTER (WHERE e.fecha_programada > NOW()) AS proxima_ejecucion,
+        COUNT(*) FILTER (WHERE e.estado::text = 'EXITOSA') AS exitos,
+        COUNT(*) FILTER (WHERE e.estado::text IS NOT NULL AND e.estado::text <> 'EXITOSA') AS fallos
+      FROM reportes.programacion p
+      LEFT JOIN reportes.ejecucion e
+        ON e.programacion_id = p.programacion_id
+      WHERE (p.vigente_hasta IS NULL OR p.vigente_hasta >= CURRENT_DATE)
+        AND ( $1::int IS NULL OR p.reporte_id = $1 )
+        AND ( $2::int IS NULL OR p.programacion_id = $2 )
+      GROUP BY
+        p.programacion_id,
+        p.nombre_programacion,
+        p.reporte_id,
+        p.expresion_programacion,
+        p.hora_referencia,
+        p.zona_horaria,
+        p.vigente_desde,
+        p.vigente_hasta,
+        p.entrega_automatica
+      ORDER BY p.nombre_programacion;
+      `,
+      params
+    );
+
+    return rows.map((row: any) => ({
+      programacionId: Number(row.programacion_id ?? 0),
+      nombre: row.nombre_programacion,
+      reporteId: row.reporte_id === null || row.reporte_id === undefined ? null : Number(row.reporte_id),
+      expresion: row.expresion_programacion,
+      horaReferencia: row.hora_referencia,
+      zonaHoraria: row.zona_horaria,
+      vigenteDesde: row.vigente_desde,
+      vigenteHasta: row.vigente_hasta,
+      entregaAutomatica: !!row.entrega_automatica,
+      ultimaEjecucion: row.ultima_ejecucion,
+      proximaEjecucion: row.proxima_ejecucion,
+      exitos: Number(row.exitos ?? 0),
+      fallos: Number(row.fallos ?? 0)
+    }));
   }
 
   async ejecucionesRecientes(filters: ProgramacionQueryDto) {
-    // Sin datos aún: retornar vacío para ejecuciones iniciales
-    return [];
+    const { reporteId, programacionId } = this.buildProgramacionParams(filters);
+    const params = [reporteId ?? null, programacionId ?? null];
+
+    const rows = await this.dataSource.query(
+      `
+      SELECT
+        e.ejecucion_id,
+        e.reporte_id,
+        e.programacion_id,
+        e.fecha_programada,
+        e.inicio,
+        e.fin,
+        e.estado::text AS estado,
+        e.mensaje_estado,
+        e.origen::text AS origen,
+        e.solicitado_por_usuario_id
+      FROM reportes.ejecucion e
+      WHERE ( $1::int IS NULL OR e.reporte_id = $1 )
+        AND ( $2::int IS NULL OR e.programacion_id = $2 )
+      ORDER BY COALESCE(e.inicio, e.fecha_programada) DESC NULLS LAST
+      LIMIT 20;
+      `,
+      params
+    );
+
+    return rows.map((row: any) => ({
+      ejecucionId: Number(row.ejecucion_id ?? 0),
+      reporteId: row.reporte_id === null || row.reporte_id === undefined ? null : Number(row.reporte_id),
+      programacionId: row.programacion_id === null || row.programacion_id === undefined ? null : Number(row.programacion_id),
+      fechaProgramada: row.fecha_programada,
+      inicio: row.inicio,
+      fin: row.fin,
+      estado: row.estado,
+      mensajeEstado: row.mensaje_estado,
+      origen: row.origen,
+      solicitadoPorUsuarioId:
+        row.solicitado_por_usuario_id === null || row.solicitado_por_usuario_id === undefined
+          ? null
+          : Number(row.solicitado_por_usuario_id)
+    }));
+  }
+
+  async crearProgramacion(dto: CrearProgramacionDto) {
+    if (dto.reporteId === undefined || dto.reporteId === null) {
+      throw new Error('reporteId es requerido');
+    }
+    if (!dto.nombre) {
+      throw new Error('nombre es requerido');
+    }
+    if (!dto.expresion) {
+      throw new Error('expresion es requerida');
+    }
+    if (!dto.horaReferencia) {
+      throw new Error('horaReferencia es requerida (HH:mm:ss)');
+    }
+    if (!dto.zonaHoraria) {
+      throw new Error('zonaHoraria es requerida (ej: America/Lima)');
+    }
+    if (!dto.vigenteDesde) {
+      throw new Error('vigenteDesde es requerido (YYYY-MM-DD)');
+    }
+
+    const entrega = dto.entregaAutomatica ?? true;
+    const now = new Date();
+
+    const params = [
+      dto.reporteId,
+      dto.nombre,
+      dto.expresion,
+      dto.horaReferencia,
+      dto.zonaHoraria,
+      dto.vigenteDesde,
+      dto.vigenteHasta ?? null,
+      entrega,
+      dto.creadoPorUsuarioId ?? null,
+      now
+    ];
+
+    const [row] = await this.dataSource.query(
+      `
+      INSERT INTO reportes.programacion (
+        reporte_id,
+        nombre_programacion,
+        expresion_programacion,
+        hora_referencia,
+        zona_horaria,
+        vigente_desde,
+        vigente_hasta,
+        entrega_automatica,
+        creado_por_usuario_id,
+        fecha_creacion
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING programacion_id;
+      `,
+      params
+    );
+
+    return { programacionId: Number(row?.programacion_id ?? 0) };
   }
 
   async resumenTopClientes(filters: TopClientesQueryDto) {
